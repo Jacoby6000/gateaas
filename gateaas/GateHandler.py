@@ -20,8 +20,9 @@ class GateHandler(http.server.SimpleHTTPRequestHandler):
             if GATE.is_dirty():
                 result = GATE.run()
                 print(result)
-                for output in OUTPUTS:
-                    requests.post(output, data=str(int(result)))
+                if OUTPUTS:
+                    for output in OUTPUTS:
+                        requests.post(output, data=str(int(result)))
         else:
             self.send_response(404, "Not Found")
 

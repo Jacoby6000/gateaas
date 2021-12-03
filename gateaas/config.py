@@ -25,13 +25,6 @@ def safe_get(key, validator=nop_validator):
     failed_load = True
     return None
 
-
-GATE_TYPE=safe_get("GATE_TYPE", lambda s: s in gate_options)
-OUTPUTS=safe_get("OUTPUTS", lambda urls: all(validators.url(url) for url in urls.split(",")))
-#INPUT_COUNT=safe_get("INPUT_COUNT", lambda s: s.isdigit() and int(s) > 0 and ((int(s) == 1 and GATE_TYPE=="NOT") or GATE_TYPE!="NOT"))
-PORT=safe_get("PORT", lambda s: s.isdigit() and int(s) > 0 and int(s) < 65536)
-BIND_ADDRESS=safe_get("BIND_ADDRESS", lambda s: all(part.isdigit() and int(part) >= 0 and int(part) <= 255 for part in s.split(".")) and len(s.split(".")) == 4 or s == "localhost")
-
 gate_options = {
     "AND": And(),
     "OR": Or(),
@@ -43,11 +36,19 @@ gate_options = {
     "NOOP": NoOp()
 }
 
+GATE_TYPE=safe_get("GATE_TYPE", lambda s: s in gate_options)
+OUTPUTS=safe_get("OUTPUTS", lambda urls: len(urls) == 0 or all(validators.url(url) for url in urls.split(",")))
+#INPUT_COUNT=safe_get("INPUT_COUNT", lambda s: s.isdigit() and int(s) > 0 and ((int(s) == 1 and GATE_TYPE=="NOT") or GATE_TYPE!="NOT"))
+PORT=safe_get("PORT", lambda s: s.isdigit() and int(s) > 0 and int(s) < 65536)
+BIND_ADDRESS=safe_get("BIND_ADDRESS", lambda s: all(part.isdigit() and int(part) >= 0 and int(part) <= 255 for part in s.split(".")) and len(s.split(".")) == 4 or s == "localhost")
+
 GATE=gate_options[GATE_TYPE]
 
 
 if failed_load:
     sys.exit("Not all environment variables set properly")
 
-OUTPUTS=OUTPUTS.split(",")
+if OUTPUTS and len(OUTPUTS) > 0:
+    OUTPUTS=OUTPUTS.split(",")
+
 PORT=int(PORT)
