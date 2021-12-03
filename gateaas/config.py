@@ -8,6 +8,7 @@ from gates.Not import Not
 from gates.NAnd import NAnd
 from gates.XOr import XOr
 from gates.XNOr import XNOr
+from gates.NoOp import NoOp
 
 failed_load = False
 nop_validator = lambda x: True
@@ -39,6 +40,7 @@ gate_options = {
     "NAND": NAnd(),
     "XOR": XOr(),
     "XNOr": XNOr()
+    "NOOP": NoOp()
 }
 
 GATE=gate_options[GATE_TYPE]

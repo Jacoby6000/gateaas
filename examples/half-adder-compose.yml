@@ -1,0 +1,39 @@
+version: '2'
+services:
+  input-a:
+    image: gateaas:1.0.0
+    container_name: gateaas-halfadder-input-a
+    ports:
+      - "8086:80"
+    environment:
+     - PORT=80
+     - BIND_ADDRESS=0.0.0.0
+     - GATE_TYPE=NOOP
+     - OUTPUTS="http://gateaas-halfadder-carry/in/0,http://gateaas-halfadder-carry/sum/0" # Adjust outputs to be any url you want this gate to post its result to.
+  input-b:
+    image: gateaas:1.0.0
+    container_name: gateaas-halfadder-input-b
+    ports:
+      - "8087:80"
+    environment:
+     - PORT=80
+     - BIND_ADDRESS=0.0.0.0
+     - GATE_TYPE=NOOP
+     - OUTPUTS="http://gateaas-halfadder-carry/in/1,http://gateaas-halfadder-carry/sum/1" # Adjust outputs to be any url you want this gate to post its result to.
+  carry:
+    image: gateaas:1.0.0
+    container_name: gateaas-halfadder-carry
+    environment:
+     - PORT=80
+     - BIND_ADDRESS=0.0.0.0
+     - GATE_TYPE=AND
+     - OUTPUTS="" # Adjust outputs to be any url you want this gate to post its result to.
+  sum:
+    image: gateaas:1.0.0
+    container_name: gateaas-halfadder-sum
+    environment:
+     - PORT=80
+     - BIND_ADDRESS=0.0.0.0
+     - GATE_TYPE=XOR
+     - OUTPUTS="" # Adjust outputs to be any url you want this gate to post its result to.
+
