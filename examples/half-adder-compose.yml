@@ -9,7 +9,7 @@ services:
      - PORT=80
      - BIND_ADDRESS=0.0.0.0
      - GATE_TYPE=NOOP
-     - OUTPUTS="http://gateaas-halfadder-carry/in/0,http://gateaas-halfadder-carry/sum/0" # Adjust outputs to be any url you want this gate to post its result to.
+     - OUTPUTS="http://gateaas-halfadder-carry/in/0,http://gateaas-halfadder-sum/in/0" # Adjust outputs to be any url you want this gate to post its result to.
   input-b:
     image: gateaas:1.0.0
     container_name: gateaas-halfadder-input-b
@@ -19,7 +19,7 @@ services:
      - PORT=80
      - BIND_ADDRESS=0.0.0.0
      - GATE_TYPE=NOOP
-     - OUTPUTS="http://gateaas-halfadder-carry/in/1,http://gateaas-halfadder-carry/sum/1" # Adjust outputs to be any url you want this gate to post its result to.
+     - OUTPUTS="http://gateaas-halfadder-carry/in/1,http://gateaas-halfadder-sum/in/1" # Adjust outputs to be any url you want this gate to post its result to.
   carry:
     image: gateaas:1.0.0
     container_name: gateaas-halfadder-carry
