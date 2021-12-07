@@ -1,1 +1,5 @@
 __pycache__
+.hls.log
+dist-newstyle
+cabal.project.local*
+
