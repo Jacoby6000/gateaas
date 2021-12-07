@@ -1,5 +1,10 @@
 version: '2'
 services:
+  debug:
+    container_name: gateaas-debug
+    image: ealen/echo-server:0.5.1
+    ports:
+      - 8085:80
   input-a:
     image: gateaas:1.0.0
     container_name: gateaas-halfadder-input-a
@@ -9,7 +14,11 @@ services:
      - PORT=80
      - BIND_ADDRESS=0.0.0.0
      - GATE_TYPE=NOOP
-     - OUTPUTS="http://gateaas-halfadder-carry/in/0,http://gateaas-halfadder-sum/in/0" # Adjust outputs to be any url you want this gate to post its result to.
+     - >
+       OUTPUTS=
+       http://carry/in/0,
+       http://sum/in/0,
+       http://debug/input-a       
   input-b:
     image: gateaas:1.0.0
     container_name: gateaas-halfadder-input-b
@@ -19,7 +28,7 @@ services:
      - PORT=80
      - BIND_ADDRESS=0.0.0.0
      - GATE_TYPE=NOOP
-     - OUTPUTS="http://gateaas-halfadder-carry/in/1,http://gateaas-halfadder-sum/in/1" # Adjust outputs to be any url you want this gate to post its result to.
+     - OUTPUTS=http://gateaas-halfadder-carry/in/1,http://gateaas-halfadder-sum/in/1
   carry:
     image: gateaas:1.0.0
     container_name: gateaas-halfadder-carry
@@ -27,7 +36,7 @@ services:
      - PORT=80
      - BIND_ADDRESS=0.0.0.0
      - GATE_TYPE=AND
-     - OUTPUTS="" # Adjust outputs to be any url you want this gate to post its result to.
+     - OUTPUTS=http://debug/carry
   sum:
     image: gateaas:1.0.0
     container_name: gateaas-halfadder-sum
@@ -35,5 +44,5 @@ services:
      - PORT=80
      - BIND_ADDRESS=0.0.0.0
      - GATE_TYPE=XOR
-     - OUTPUTS="" # Adjust outputs to be any url you want this gate to post its result to.
+     - OUTPUTS=http://debug/sum
 

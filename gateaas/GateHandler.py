@@ -1,9 +1,7 @@
 import http.server
 import requests
 import json
-    
-from config import GATE
-from config import OUTPUTS
+from config import GATE, OUTPUTS, logger
 
 class GateHandler(http.server.SimpleHTTPRequestHandler):
 
@@ -16,6 +14,8 @@ class GateHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(200, "OK")
             self.send_header("Content-type", "text/plain")
             self.end_headers()
+            print(bool(post_body))
+            print(OUTPUTS)
             GATE.set(int(path_parts[2]), bool(post_body))
             if GATE.is_dirty():
                 result = GATE.run()
