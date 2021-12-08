@@ -1,12 +1,19 @@
 {-# LANGUAGE TypeFamilies, RecursiveDo #-}
-module Parser(gateaasGrammar) where
+module Parser(gateaasGrammar, parseString) where
 
 import Control.Applicative
 import Data.Char
 import Text.Earley
-import Text.Earley.Grammar
+import Data.List.Split
 
 import Model
+
+parseString :: [Char] -> ([(BoolExpr, Int)], Report [Char] [[Char]])
+parseString s = 
+  allParses (parser gateaasGrammar) $ wordsBy tokenizer s
+
+tokenizer :: Char -> Bool
+tokenizer c = isSpace c || c == '(' || c == ')'
 
 gateaasGrammar :: Grammar r (Prod r [Char] [Char] BoolExpr)
 gateaasGrammar = mdo 
@@ -26,16 +33,11 @@ gateaasGrammar = mdo
   y5 <- rule $ XNOR <$> y5 <* namedToken "XNOR" <*> y6 <|> y6
   y6 <- rule $ NOR <$> y6 <* namedToken "NOR" <*> y7 <|> y7
   y7 <- rule $ NOT <$> (namedToken "NOT" *> y8) <|> y8
-  y8 <- rule $ REF <$> (tail <$> identifierRef) <|> y9
-  y9 <- rule $ namedToken "(" *> y1 <* namedToken ")"
+  y8 <- rule $ REF <$> identifier <|> y10
+  -- y9 <- rule $ LIT <$> (toLit <$> satisfy isLit) <|> y10
+  y10 <- rule $ namedToken "(" *> y1 <* namedToken ")"
   return program
   where
-    lit = LIT <$> (toLit <$> satisfy isLit) <?> "lit"
-
-    identRef ('$':x) = ident x
-    identRef _ = False
-    identifierRef = satisfy identRef <?> "identifier-ref"
-
     ident (x:_) = isAlpha x
     ident _     = False
     identifier = satisfy ident <?> "identifier"
@@ -45,10 +47,9 @@ gateaasGrammar = mdo
     isFalse "0" = True
     isFalse s = (toLower <$> s) == "false"
 
-    isLit s = isTrue s || isFalse s
-
-    toLit s
-      | isFalse s = False
-      | isTrue s  = True
-      | otherwise = error "impossible"
+    -- isLit s = isTrue s || isFalse s
+    -- toLit s
+    -- | isFalse s = False
+    -- | isTrue s  = True
+    -- | otherwise = error "impossible"
 

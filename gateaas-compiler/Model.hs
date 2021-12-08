@@ -12,7 +12,7 @@ data BoolExpr
   | XOR BoolExpr BoolExpr
   | XNOR BoolExpr BoolExpr
   | NOT BoolExpr
-  | LIT Bool
+  -- | LIT Bool
   | INPUT [Char] 
   | OUTPUT [Char] BoolExpr
   | LET [Char] BoolExpr
