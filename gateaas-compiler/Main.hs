@@ -69,15 +69,8 @@ data GateType
 
 data Gate = Gate {
   _gateType :: GateType,
-  _outputs :: [GateRef],
-  _name :: Maybe String
-}
-  deriving(Eq, Show)
-
-data GateRef = GateRef {
-  _gateRefType :: GateType,
-  _inputRef :: Int,
-  _nameRef :: Maybe String
+  _name :: Maybe String,
+  _outputs :: [Gate]
 }
   deriving(Eq, Show)
 
@@ -96,7 +89,7 @@ appendBinding :: Gate -> Env -> Env
 appendBinding g (Env b i pmin pmax) = Env (g:b) i pmin pmax
 
 appendVarBinding :: Gate -> Env -> Env
-appendVarBinding g@(Gate _ _ (Just name)) (Env b i pmin pmax) = Env (g:b) (Set.insert name i) pmin pmax
+appendVarBinding g@(Gate _ (Just name) _) (Env b i pmin pmax) = Env (g:b) (Set.insert name i) pmin pmax
 appendVarBinding g (Env b i pmin pmax) = Env (g:b) i pmin pmax
 
 latestBinding :: Env -> Gate
@@ -112,7 +105,7 @@ envToDocker (Env gates _ minPort maxPort) =
       services = snd $ foldl (\(p,ss) g -> (p + 1, buildService p g:ss)) (0, []) gates
   
       buildService :: Int -> Gate -> String
-      buildService portOffset (Gate tpe outs name) = intercalate "\n" [
+      buildService portOffset (Gate tpe name outs) = intercalate "\n" [
         "  " <> serviceName <> ": ",
         "    image: gateaas:1.0.0",
         "    container_name: gateaas-" <> serviceName,
@@ -122,25 +115,28 @@ envToDocker (Env gates _ minPort maxPort) =
         "      - PORT=80",
         "      - BIND_ADDRESS=0.0.0.0",
         "      - GATE_TYPE=" <> show tpe,
-        "      - OUTPUTS=" <> intercalate "," (gateUrl portOffset <$> outs),
+        "      - OUTPUTS=" <> intercalate "," (uncurry (gateUrl portOffset) <$> zip outs [0..]),
         ""
         ]
           where 
             serviceName = gateName portOffset name tpe
 
 
+declarationNames :: Env -> [String]
+declarationNames (Env gs _ _ _) = catMaybes $ go gs
+  where
+    go :: [Gate] -> [Maybe String]
+    go gates@(_:_) = go (_outputs =<< gates) <> (_name <$> gates)
+    go [] = []
+
+
 
 progToInOutMap :: Env -> BoolExpr -> Either String Env
 progToInOutMap initialEnv expr = finalResult
   where
-    initialResult = cata go expr
-
-    initialBindings :: [Gate]
-    initialBindings = _bindings initialResult
+    initialResult = cata go expr []
     
-    usedVars = do
-      outs <- _outputs <$> initialBindings
-      catMaybes $ _nameRef <$> outs
+    usedVars = declarationNames initialResult
 
     existingVars = _vars initialResult
 
@@ -153,55 +149,48 @@ progToInOutMap initialEnv expr = finalResult
       else
         Right initialResult
 
-    go :: BoolExprF Env -> Env
-    go (BoolProgramF envs) = sconcat ((NonEmpty.:|) initialEnv envs)
-    go (ANDF l r) = newBinEnv AND l r
-    go (NANDF l r) = newBinEnv NAND l r
-    go (ORF l r) = newBinEnv OR l r
-    go (NORF l r) = newBinEnv NOR l r
-    go (XORF l r) = newBinEnv XOR l r
-    go (XNORF l r) = newBinEnv XNOR l r
+    go :: BoolExprF ([Gate] -> Env) -> ([Gate] -> Env)
+    go (BoolProgramF envs) = combineEnvs envs
+    go (ANDF l r) = newBinaryEnv AND l r
+    go (NANDF l r) = newBinaryEnv NAND l r
+    go (ORF l r) = newBinaryEnv OR l r
+    go (NORF l r) = newBinaryEnv NOR l r
+    go (XORF l r) = newBinaryEnv XOR l r
+    go (XNORF l r) = newBinaryEnv XNOR l r
     go (NOTF e) = newUnaryEnv XNOR Nothing e
-    go (REFF name) = newUnaryEnv NOOP (Just name) initialEnv
+    go (REFF name) = newUnaryEnv NOOP (Just name) (const initialEnv)
     go (LETF name e) = newBindingEnv NOOP name e
-    go (INPUTF name) = newBindingEnv NOOP name initialEnv
-    go (OUTPUTF name e) = newUnaryEnv NOOP (Just name) e
-
-    -- TODO: Make this newFooEnv stuff better.
-    newBindingEnv :: GateType -> String -> Env -> Env
-    newBindingEnv tpe name e@(Env [] _ _ _) = appendVarBinding (gate tpe (Just name) []) e
-    newBindingEnv tpe name e = appendVarBinding newGate e 
-      where
-        newGate = gate tpe (Just name) [gateRef 0 (latestBinding e)]
-
-
-    newUnaryEnv :: GateType -> Maybe String -> Env -> Env
-    newUnaryEnv tpe name e@(Env [] _ _ _) = appendBinding (gate tpe name []) e
-    newUnaryEnv tpe name e = appendBinding newGate e 
-      where
-        newGate = gate tpe name [gateRef 0 (latestBinding e)]
-
-    newBinEnv :: GateType -> Env -> Env -> Env
-    newBinEnv tpe l r = appendBinding newGate updatedEnv
-      where
-        updatedEnv = l <> r
-        newGate = 
-          gate tpe Nothing [
-            gateRef 0 (latestBinding l),
-            gateRef 1 (latestBinding r)
-          ]
+    go (INPUTF name) = newBindingEnv NOOP name (const initialEnv)
+    go (OUTPUTF name e) = newBindingEnv NOOP name e
     
+    combineEnvs :: [[Gate] -> Env] -> ([Gate] -> Env)
+    combineEnvs funcs = \gates ->  sconcat (initialEnv NonEmpty.:| (($gates) <$> funcs))
+
+
+    newBindingEnv :: GateType -> String -> ([Gate] -> Env) -> ([Gate] -> Env)
+    newBindingEnv tpe name gateToEnv = \gates ->
+      do
+        let newGate = Gate tpe (Just name) gates
+        appendVarBinding newGate (gateToEnv [newGate])
+    
+    newUnaryEnv :: GateType -> Maybe String -> ([Gate] -> Env) -> ([Gate] -> Env)
+    newUnaryEnv tpe name gateToEnv = \gates ->
+      do
+        let newGate = Gate tpe name gates
+        appendBinding newGate (gateToEnv [newGate])
+
+    newBinaryEnv :: GateType -> ([Gate] -> Env) -> ([Gate] -> Env) -> ([Gate] -> Env)
+    newBinaryEnv tpe gateToEnvL gateToEnvR = \gates ->
+      do
+        let newGate = Gate tpe Nothing gates
+        appendBinding newGate (gateToEnvL [newGate] <> gateToEnvR [newGate])
+
+type GateBuilder = Maybe Gate -> Gate
 
 gateName :: Int -> Maybe String -> GateType -> String
 gateName idx Nothing tpe = show tpe <> "_" <> show idx
 gateName _ (Just name) _ = name
 
-gateUrl :: Int -> GateRef -> String
-gateUrl idx (GateRef tpe inputNum name) = "http://" <> gateName idx name tpe <> "/in/" <> show inputNum
-
-gateRef :: Int -> Gate -> GateRef
-gateRef idx (Gate tpe _ name) = GateRef tpe idx name
-
-gate :: GateType -> Maybe String -> [GateRef] -> Gate 
-gate tpe name refs = Gate tpe refs name
+gateUrl :: Int -> Gate -> Int -> String
+gateUrl idx (Gate tpe name _) inputNum = "http://" <> gateName idx name tpe <> "/in/" <> show inputNum
 
