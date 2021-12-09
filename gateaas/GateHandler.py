@@ -14,12 +14,10 @@ class GateHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(200, "OK")
             self.send_header("Content-type", "text/plain")
             self.end_headers()
-            print(bool(post_body))
-            print(OUTPUTS)
             GATE.set(int(path_parts[2]), bool(post_body))
             if GATE.is_dirty():
                 result = GATE.run()
-                print(result)
+                logger.info(result)
                 if OUTPUTS:
                     for output in OUTPUTS:
                         requests.post(output, data=str(int(result)))
