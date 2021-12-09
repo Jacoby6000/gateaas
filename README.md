@@ -34,7 +34,7 @@ A gate may be probed via `curl http://my-gate/probe`
 
 A gate accepts input via `curl http://my-gate/in/$inputNumber -d $bool` 
 * `$inputNumber` represents the pin being set.  Unary gates (NOOP, NOT) will always use input 0. Binary gates will use 0 or 1.
-* `$n` represents the value the pin is being set to.  Accepts 0, 1, true, false
+* `$bool` represents the value the pin is being set to.  Accepts 0, 1, true, false
 
 See examples for what is possible
 
