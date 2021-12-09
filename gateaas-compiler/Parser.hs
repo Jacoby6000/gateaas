@@ -9,11 +9,14 @@ import Data.List.Split
 import Model
 
 parseString :: [Char] -> ([(BoolExpr, Int)], Report [Char] [[Char]])
-parseString s = 
-  allParses (parser gateaasGrammar) $ wordsBy tokenizer s
+parseString s = allParses (parser gateaasGrammar) $ tokenize s
 
-tokenizer :: Char -> Bool
-tokenizer = isSpace
+tokenize :: String -> [String]
+tokenize s = subToken =<< wordsBy isSpace s
+  where
+    subToken :: String -> [String]
+    subToken ('(':t) = ["(", t]
+    subToken str = if last str == ')' then [init str, ")"] else [str]
 
 gateaasGrammar :: Grammar r (Prod r [Char] [Char] BoolExpr)
 gateaasGrammar = mdo 

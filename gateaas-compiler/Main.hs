@@ -31,7 +31,7 @@ main = do
       \INPUT cIn \
       \LET aXORb = a XOR b \
       \OUTPUT S = aXORb XOR cIn \
-      \OUTPUT cOut = ( a AND b ) OR ( aXORb AND cIn )"
+      \OUTPUT cOut = (a AND b) OR (aXORb AND cIn)"
   
     mostParsed = fst $ last (fst result)
 
