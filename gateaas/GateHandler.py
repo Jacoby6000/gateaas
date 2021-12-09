@@ -14,7 +14,7 @@ class GateHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(200, "OK")
             self.send_header("Content-type", "text/plain")
             self.end_headers()
-            GATE.set(int(path_parts[2]), bool(post_body))
+            GATE.set(int(path_parts[2]), bool(int(post_body)))
             if GATE.is_dirty():
                 result = GATE.run()
                 logger.info(result)
