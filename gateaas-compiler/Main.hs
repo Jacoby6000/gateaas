@@ -1,23 +1,29 @@
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeFamilies, TupleSections #-}
 module Main where
 
-import Data.Functor.Foldable (cata)
+import Control.Monad
+import Control.Monad.Random
+import Data.Functor.Foldable (cataA, cata)
 import Data.Semigroup
-import Data.Maybe
 import Data.List
+import Data.Maybe
+import Text.Pretty.Simple (pPrint)
+import Data.Bifunctor
 
 import Model (BoolExpr, BoolExprF(..))
 import Parser
 
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Set as Set
+import qualified Data.Map.Strict as Map 
 
 main :: IO ()
 main = do
   putStrLn $ progToString mostParsed
   putStrLn ""
   putStrLn ""
-  putStrLn $ either error id dockerServices
+  let env = first (\e -> "References to variables before they are defined: " <> intercalate "," e) (progToInOutMap (Env [] 10000 11000) mostParsed)
+  putStrLn $ either error id (envToDocker <$> env)
   where
     result = parseString
       "INPUT a \
@@ -28,10 +34,7 @@ main = do
       \OUTPUT cOut = (a AND b) OR (aXORb AND cIn)"
   
     mostParsed = fst $ last (fst result)
-    dockerServices = 
-      do 
-        outMap <- progToInOutMap (Env [] Set.empty 8086 10000) mostParsed
-        return $ envToDocker outMap
+
 
 
 progToString :: BoolExpr -> String
@@ -65,132 +68,135 @@ data GateType
   | XNOR
   | NOT
   | NOOP
+  | REF
+  | INPUT
+  | LET
+  | OUTPUT
   deriving(Eq, Show)
 
 data Gate = Gate {
   _gateType :: GateType,
-  _name :: Maybe String,
-  _outputs :: [Gate]
+  _name :: String,
+  _outputs :: [GateRef]
+}
+  deriving(Eq, Show)
+
+data GateRef = GateRef {
+  _refName :: String,
+  _input :: Int
 }
   deriving(Eq, Show)
 
 data Env = Env {
   _bindings :: [Gate],
-  _vars :: Set.Set String,
   _portMin :: Int,
   _portMax :: Int
 }
   deriving(Eq, Show)
 
 instance Semigroup Env where
-  (<>) (Env g i pmin pmax) (Env g2 i2 _ _) = Env (g <> g2) (i <> i2) pmin pmax
+  (<>) (Env g pmin pmax) (Env g2 _ _) = Env (g <> g2) pmin pmax
 
 appendBinding :: Gate -> Env -> Env
-appendBinding g (Env b i pmin pmax) = Env (g:b) i pmin pmax
+appendBinding g (Env b pmin pmax) = Env (g:b) pmin pmax
 
-appendVarBinding :: Gate -> Env -> Env
-appendVarBinding g@(Gate _ (Just name) _) (Env b i pmin pmax) = Env (g:b) (Set.insert name i) pmin pmax
-appendVarBinding g (Env b i pmin pmax) = Env (g:b) i pmin pmax
+appendOutputs :: [GateRef] -> Gate -> Gate
+appendOutputs refs (Gate tpe name outputs) = Gate tpe name (outputs <> refs)
 
-latestBinding :: Env -> Gate
-latestBinding (Env (b:_) _ _ _) = b
-latestBinding _ = error "impossible"
+resolvedGate :: Gate -> Gate
+resolvedGate (Gate tpe name outputs) = Gate (resolvedGateType tpe) name outputs
+
+resolvedGateType :: GateType -> GateType
+resolvedGateType LET = NOOP
+resolvedGateType INPUT = NOOP
+resolvedGateType OUTPUT = NOOP
+resolvedGateType t = t
 
 envToDocker :: Env -> String
-envToDocker (Env gates _ minPort maxPort) =
+envToDocker (Env gates minPort maxPort) =
   "version: '2'\n\
-  \services: \n" <> mconcat services
+  \services: \n" <> mconcat (reverse services)
     where 
       services :: [String] 
       services = snd $ foldl (\(p,ss) g -> (p + 1, buildService p g:ss)) (0, []) gates
   
       buildService :: Int -> Gate -> String
       buildService portOffset (Gate tpe name outs) = intercalate "\n" [
-        "  " <> serviceName <> ": ",
+        "  " <> name <> ": ",
         "    image: gateaas:1.0.0",
-        "    container_name: gateaas-" <> serviceName,
+        "    container_name: gateaas-" <> name,
         "    ports:",
         "      - \"" <> show (portOffset + minPort) <> ":80\"",
         "    environment:",
         "      - PORT=80",
         "      - BIND_ADDRESS=0.0.0.0",
         "      - GATE_TYPE=" <> show tpe,
-        "      - OUTPUTS=" <> intercalate "," (uncurry (gateUrl portOffset) <$> zip outs [0..]),
+        "      - OUTPUTS=" <> intercalate "," (gateUrl <$> outs),
         ""
         ]
-          where 
-            serviceName = gateName portOffset name tpe
 
+resolveEnv :: Env -> Either [String] Env
+resolveEnv (Env gates mn mx) = do
+  let (errs, resolved) = foldl resolve ([], Map.empty) gates
+  maybe (Right $ Env (updateGate resolved <$> filter (\g -> _gateType g /= REF) gates) mn mx) (const $ Left errs) $ head' errs
+    where 
+      resolve ::([String], Map.Map String Gate) -> Gate -> ([String], Map.Map String Gate)
+      resolve (errs, bindings) g@(Gate LET n _) = (errs, Map.insert n g bindings)
+      resolve (errs, bindings) g@(Gate INPUT n _) = (errs, Map.insert n g bindings)
+      resolve (errs, bindings) g@(Gate REF n outs) = maybe (n:errs, bindings) (\gate -> (errs, Map.insert n (appendOutputs outs gate) bindings)) $ Map.lookup n bindings
+      resolve s _ = s
 
-declarationNames :: Env -> [String]
-declarationNames (Env gs _ _ _) = catMaybes $ go gs
-  where
-    go :: [Gate] -> [Maybe String]
-    go gates@(_:_) = go (_outputs =<< gates) <> (_name <$> gates)
-    go [] = []
+      updateGate :: Map.Map String Gate -> Gate -> Gate
+      updateGate resolved gate = resolvedGate $ fromMaybe gate (Map.lookup (_name gate) resolved)
 
-
-
-progToInOutMap :: Env -> BoolExpr -> Either String Env
+progToInOutMap :: Env -> BoolExpr -> Either [String] Env
 progToInOutMap initialEnv expr = finalResult
   where
-    initialResult = cata go expr []
-    
-    usedVars = declarationNames initialResult
-
-    existingVars = _vars initialResult
-
-    badVars = Set.fromList usedVars Set.\\ existingVars
-
-
     finalResult = 
-      if Set.empty /= badVars then
-        Left $ "References to undefined variables: " <> show badVars
-      else
-        Right initialResult
+        resolveEnv $ ($[]) <$> fst $ cataA go expr
+        --(consolidateEnv <$> validatedResult)
+      
 
-    go :: BoolExprF ([Gate] -> Env) -> ([Gate] -> Env)
-    go (BoolProgramF envs) = combineEnvs envs
-    go (ANDF l r) = newBinaryEnv AND l r
-    go (NANDF l r) = newBinaryEnv NAND l r
-    go (ORF l r) = newBinaryEnv OR l r
-    go (NORF l r) = newBinaryEnv NOR l r
-    go (XORF l r) = newBinaryEnv XOR l r
-    go (XNORF l r) = newBinaryEnv XNOR l r
-    go (NOTF e) = newUnaryEnv XNOR Nothing e
-    go (REFF name) = newUnaryEnv NOOP (Just name) (const initialEnv)
-    go (LETF name e) = newBindingEnv NOOP name e
-    go (INPUTF name) = newBindingEnv NOOP name (const initialEnv)
-    go (OUTPUTF name e) = newBindingEnv NOOP name e
+
+    go :: BoolExprF ([GateRef] -> Env, String) -> ([GateRef] -> Env, String)
+    go (BoolProgramF envs) = (combineEnvs $ fst <$> envs, "")
+    go (ANDF (l, lName) (r, rName)) = newBinaryEnv AND l r (lName <> "-and-" <> rName)
+    go (NANDF (l, lName) (r, rName)) = newBinaryEnv NAND l r (lName <> "-nand-" <> rName)
+    go (ORF (l, lName) (r, rName)) = newBinaryEnv OR l r (lName <> "-or-" <> rName)
+    go (NORF (l, lName) (r, rName)) = newBinaryEnv NOR l r (lName <> "-nor-" <> rName)
+    go (XORF (l, lName) (r, rName)) = newBinaryEnv XOR l r (lName <> "-xor-" <> rName)
+    go (XNORF (l, lName) (r, rName)) = newBinaryEnv XNOR l r (lName <> "-xnor-" <> rName)
+    go (NOTF (e, name)) = newUnaryEnv NOT e ("not-" <> name)
+    go (REFF name) = newUnaryEnv REF (const initialEnv) name
+    go (LETF name (e,_)) = newUnaryEnv LET e name
+    go (INPUTF name) = newUnaryEnv INPUT (const initialEnv) name
+    go (OUTPUTF name (e,_)) = newUnaryEnv OUTPUT e name
     
-    combineEnvs :: [[Gate] -> Env] -> ([Gate] -> Env)
+    combineEnvs :: [[GateRef] -> Env] -> ([GateRef] -> Env)
     combineEnvs funcs = \gates ->  sconcat (initialEnv NonEmpty.:| (($gates) <$> funcs))
 
+    newUnaryEnv :: GateType -> ([GateRef] -> Env) -> String -> ([GateRef] -> Env, String)
+    newUnaryEnv tpe gateToEnv name = 
+      (buildNewEnv gateToEnv, name)
+        where 
+          buildNewEnv l = \refs -> newEnv (Gate tpe name refs) l
+          newEnv g l = appendBinding g (l [tupleToRef (0,g)])
 
-    newBindingEnv :: GateType -> String -> ([Gate] -> Env) -> ([Gate] -> Env)
-    newBindingEnv tpe name gateToEnv = \gates ->
-      do
-        let newGate = Gate tpe (Just name) gates
-        appendVarBinding newGate (gateToEnv [newGate])
-    
-    newUnaryEnv :: GateType -> Maybe String -> ([Gate] -> Env) -> ([Gate] -> Env)
-    newUnaryEnv tpe name gateToEnv = \gates ->
-      do
-        let newGate = Gate tpe name gates
-        appendBinding newGate (gateToEnv [newGate])
-
-    newBinaryEnv :: GateType -> ([Gate] -> Env) -> ([Gate] -> Env) -> ([Gate] -> Env)
-    newBinaryEnv tpe gateToEnvL gateToEnvR = \gates ->
-      do
-        let newGate = Gate tpe Nothing gates
-        appendBinding newGate (gateToEnvL [newGate] <> gateToEnvR [newGate])
+    newBinaryEnv :: GateType -> ([GateRef] -> Env) -> ([GateRef] -> Env) -> String -> ([GateRef] -> Env, String)
+    newBinaryEnv tpe gateToEnvL gateToEnvR name = 
+      (buildNewEnv gateToEnvL gateToEnvR, name)
+        where 
+          buildNewEnv l r = \refs -> newEnv (Gate tpe name refs) l r
+          newEnv g l r = appendBinding g (l [tupleToRef (0,g)] <> r [tupleToRef (1,g)])
 
 type GateBuilder = Maybe Gate -> Gate
 
-gateName :: Int -> Maybe String -> GateType -> String
-gateName idx Nothing tpe = show tpe <> "_" <> show idx
-gateName _ (Just name) _ = name
+gateUrl :: GateRef -> String
+gateUrl (GateRef name inputNum) = "http://" <> name <> "/in/" <> show inputNum
 
-gateUrl :: Int -> Gate -> Int -> String
-gateUrl idx (Gate tpe name _) inputNum = "http://" <> gateName idx name tpe <> "/in/" <> show inputNum
+tupleToRef :: (Int, Gate) -> GateRef
+tupleToRef (n, g) = GateRef (_name g) n
 
+head' :: [a] -> Maybe a
+head' (a:_) = Just a
+head' [] = Nothing

@@ -1,0 +1,113 @@
+version: '2'
+services: 
+  a: 
+    image: gateaas:1.0.0
+    container_name: gateaas-a
+    ports:
+      - "10000:80"
+    environment:
+      - PORT=80
+      - BIND_ADDRESS=0.0.0.0
+      - GATE_TYPE=NOOP
+      - OUTPUTS=http://a-xor-b/in/0,http://a-and-b-or-aXORb/in/0
+  b: 
+    image: gateaas:1.0.0
+    container_name: gateaas-b
+    ports:
+      - "10001:80"
+    environment:
+      - PORT=80
+      - BIND_ADDRESS=0.0.0.0
+      - GATE_TYPE=NOOP
+      - OUTPUTS=http://a-xor-b/in/1,http://b-or-aXORb/in/0
+  cIn: 
+    image: gateaas:1.0.0
+    container_name: gateaas-cIn
+    ports:
+      - "10002:80"
+    environment:
+      - PORT=80
+      - BIND_ADDRESS=0.0.0.0
+      - GATE_TYPE=NOOP
+      - OUTPUTS=http://aXORb-xor-cIn/in/1,http://a-and-b-or-aXORb-and-cIn/in/1
+  aXORb: 
+    image: gateaas:1.0.0
+    container_name: gateaas-aXORb
+    ports:
+      - "10003:80"
+    environment:
+      - PORT=80
+      - BIND_ADDRESS=0.0.0.0
+      - GATE_TYPE=NOOP
+      - OUTPUTS=http://aXORb-xor-cIn/in/0,http://b-or-aXORb/in/1
+  a-xor-b: 
+    image: gateaas:1.0.0
+    container_name: gateaas-a-xor-b
+    ports:
+      - "10004:80"
+    environment:
+      - PORT=80
+      - BIND_ADDRESS=0.0.0.0
+      - GATE_TYPE=XOR
+      - OUTPUTS=http://aXORb/in/0
+  S: 
+    image: gateaas:1.0.0
+    container_name: gateaas-S
+    ports:
+      - "10005:80"
+    environment:
+      - PORT=80
+      - BIND_ADDRESS=0.0.0.0
+      - GATE_TYPE=OUTPUT
+      - OUTPUTS=
+  aXORb-xor-cIn: 
+    image: gateaas:1.0.0
+    container_name: gateaas-aXORb-xor-cIn
+    ports:
+      - "10006:80"
+    environment:
+      - PORT=80
+      - BIND_ADDRESS=0.0.0.0
+      - GATE_TYPE=XOR
+      - OUTPUTS=http://S/in/0
+  cOut: 
+    image: gateaas:1.0.0
+    container_name: gateaas-cOut
+    ports:
+      - "10007:80"
+    environment:
+      - PORT=80
+      - BIND_ADDRESS=0.0.0.0
+      - GATE_TYPE=OUTPUT
+      - OUTPUTS=
+  a-and-b-or-aXORb-and-cIn: 
+    image: gateaas:1.0.0
+    container_name: gateaas-a-and-b-or-aXORb-and-cIn
+    ports:
+      - "10008:80"
+    environment:
+      - PORT=80
+      - BIND_ADDRESS=0.0.0.0
+      - GATE_TYPE=AND
+      - OUTPUTS=http://cOut/in/0
+  a-and-b-or-aXORb: 
+    image: gateaas:1.0.0
+    container_name: gateaas-a-and-b-or-aXORb
+    ports:
+      - "10009:80"
+    environment:
+      - PORT=80
+      - BIND_ADDRESS=0.0.0.0
+      - GATE_TYPE=AND
+      - OUTPUTS=http://a-and-b-or-aXORb-and-cIn/in/0
+  b-or-aXORb: 
+    image: gateaas:1.0.0
+    container_name: gateaas-b-or-aXORb
+    ports:
+      - "10010:80"
+    environment:
+      - PORT=80
+      - BIND_ADDRESS=0.0.0.0
+      - GATE_TYPE=OR
+      - OUTPUTS=http://a-and-b-or-aXORb/in/1
+

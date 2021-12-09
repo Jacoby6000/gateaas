@@ -23,9 +23,11 @@ executable gateaas
                       base >=4.13 && <5, 
                       Earley >0.13,
                       recursion-schemes >=5.2,
+                      MonadRandom >=0.5,
                       ListLike,
                       containers,
-                      split
+                      split,
+                      pretty-simple
   hs-source-dirs: gateaas-compiler
   default-language:    Haskell2010
   ghc-options: -Wall
