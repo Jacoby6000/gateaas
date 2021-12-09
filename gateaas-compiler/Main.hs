@@ -12,13 +12,17 @@ import Parser
 
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map.Strict as Map 
+import Text.Pretty.Simple (pPrint)
 
 main :: IO ()
 main = do
   putStrLn $ progToString mostParsed
+  pPrint result
+  pPrint mostParsed
   putStrLn ""
   putStrLn ""
   let env = first (\e -> "References to variables before they are defined: " <> intercalate "," e) (progToInOutMap (Env [] 10000 11000) mostParsed)
+  pPrint env
   putStrLn $ either error id (envToDocker <$> env)
   where
     result = parseString
@@ -27,7 +31,7 @@ main = do
       \INPUT cIn \
       \LET aXORb = a XOR b \
       \OUTPUT S = aXORb XOR cIn \
-      \OUTPUT cOut = (a AND b) OR (aXORb AND cIn)"
+      \OUTPUT cOut = ( a AND b ) OR ( aXORb AND cIn )"
   
     mostParsed = fst $ last (fst result)
 
