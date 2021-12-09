@@ -1,20 +1,16 @@
-{-# LANGUAGE TypeFamilies, TupleSections #-}
+{-# LANGUAGE TypeFamilies #-}
 module Main where
 
-import Control.Monad
-import Control.Monad.Random
 import Data.Functor.Foldable (cataA, cata)
 import Data.Semigroup
 import Data.List
 import Data.Maybe
-import Text.Pretty.Simple (pPrint)
 import Data.Bifunctor
 
 import Model (BoolExpr, BoolExprF(..))
 import Parser
 
 import qualified Data.List.NonEmpty as NonEmpty
-import qualified Data.Set as Set
 import qualified Data.Map.Strict as Map 
 
 main :: IO ()
@@ -113,7 +109,7 @@ resolvedGateType OUTPUT = NOOP
 resolvedGateType t = t
 
 envToDocker :: Env -> String
-envToDocker (Env gates minPort maxPort) =
+envToDocker (Env gates minPort _) =
   "version: '2'\n\
   \services: \n" <> mconcat (reverse services)
     where 
@@ -143,7 +139,7 @@ resolveEnv (Env gates mn mx) = do
       resolve ::([String], Map.Map String Gate) -> Gate -> ([String], Map.Map String Gate)
       resolve (errs, bindings) g@(Gate LET n _) = (errs, Map.insert n g bindings)
       resolve (errs, bindings) g@(Gate INPUT n _) = (errs, Map.insert n g bindings)
-      resolve (errs, bindings) g@(Gate REF n outs) = maybe (n:errs, bindings) (\gate -> (errs, Map.insert n (appendOutputs outs gate) bindings)) $ Map.lookup n bindings
+      resolve (errs, bindings) (Gate REF n outs) = maybe (n:errs, bindings) (\gate -> (errs, Map.insert n (appendOutputs outs gate) bindings)) $ Map.lookup n bindings
       resolve s _ = s
 
       updateGate :: Map.Map String Gate -> Gate -> Gate
