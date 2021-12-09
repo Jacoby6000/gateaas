@@ -1,11 +1,13 @@
 {-# LANGUAGE TypeFamilies #-}
 module Main where
 
+import Control.Monad.Except
 import Data.Functor.Foldable (cataA, cata)
 import Data.Semigroup
 import Data.List
 import Data.Maybe
 import Data.Bifunctor
+import System.Environment
 
 import Model (BoolExpr, BoolExprF(..))
 import Parser
@@ -16,24 +18,22 @@ import Text.Pretty.Simple (pPrint)
 
 main :: IO ()
 main = do
-  putStrLn $ progToString mostParsed
-  pPrint result
-  pPrint mostParsed
-  putStrLn ""
-  putStrLn ""
+  (inFile:outFile:_) <- getArgs
+  programString <- readFile inFile
+  let result = parseString programString 
+  let mostParsed = fst $ last (fst result)
   let env = first (\e -> "References to variables before they are defined: " <> intercalate "," e) (progToInOutMap (Env [] 10000 11000) mostParsed)
-  pPrint env
-  putStrLn $ either error id (envToDocker <$> env)
-  where
-    result = parseString
-      "INPUT a \
-      \INPUT b \
-      \INPUT cIn \
-      \LET aXORb = a XOR b \
-      \OUTPUT S = aXORb XOR cIn \
-      \OUTPUT cOut = (a AND b) OR (aXORb AND cIn)"
-  
-    mostParsed = fst $ last (fst result)
+  written <- traverse (writeFile outFile) (envToDocker <$> env)
+  either error (const . putStrLn $ "Successfully wrote to " <> outFile) written
+
+  -- putStrLn $ progToString mostParsed
+  -- pPrint result
+  -- pPrint mostParsed
+  -- putStrLn ""
+  -- putStrLn ""
+  -- pPrint env
+
+
 
 
 
