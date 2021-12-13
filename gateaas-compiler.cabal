@@ -22,6 +22,7 @@ executable gateaas-compiler
   build-depends:
                       base >=4.13 && <5, 
                       Earley >0.13,
+                      optparse-applicative >=0.16,
                       recursion-schemes >=5.2,
                       MonadRandom >=0.5,
                       ListLike,

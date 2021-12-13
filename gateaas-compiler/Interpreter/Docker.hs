@@ -1,13 +1,15 @@
-module Interpreter.Docker(Env(..), initEnv, envToDocker) where
+module Interpreter.Docker(DockerEnv(..), dockerComposeProgram, dockerEnvParser) where
+
+import Options.Applicative
 
 import Data.List
+import Data.List.Split
 
 import Interpreter.Resolver(Program(..), Gate(..), GateRef(..))
 
 import qualified Data.Map.Strict as Map
 
-data Env = Env {
-  _scope :: Program,
+data DockerEnv = DockerEnv {
   _portMin :: Int,
   _portMax :: Int,
   _outputMapping :: Map.Map String String,
@@ -15,11 +17,25 @@ data Env = Env {
   _debugOutputs :: [String]
 }
 
-initEnv :: Int -> Int -> Map.Map String String -> Bool -> [String] -> Program -> Env
-initEnv minPort maxPort outputMap debugMode debugOuts prog = Env prog minPort maxPort outputMap debugMode debugOuts
+dockerEnvParser :: ParserInfo DockerEnv
+dockerEnvParser = info (envParser <**> helper) (progDesc "Create a docker-compose gateaas cluster file")
+  where
+    envParser = DockerEnv
+      <$> option auto (long "min-port" <> metavar "PORT" <> help "The minimum port to bind to in the docker compose output.") 
+      <*> option auto (long "max-port" <> metavar "PORT" <> help "The maximum port to bind to in the docker compose output.") 
+      <*> outputMappingParser
+      <*> switch (long "debug-mode" <> short 'd' <> help "If enabled, all docker containers will bind to a host port, enabling every gate to be probed directly.") 
+      <*> many (strOption (long "debug-output" <> metavar "DEBUG_OUTPUT" <> help "If the debug-mode flag is set, all specified URLs will be sent the output of all gates that have a port bound to the host."))
+    outputMappingParser :: Parser (Map.Map String String)
+    outputMappingParser = Map.fromList <$> many (option (eitherReader buildPair) $ long "gate-output" <> short 'g' <> metavar "$OUTPUT=$URL" <> help "Sends the result of $OUTPUT to $URL")
 
-envToDocker :: Env -> String
-envToDocker (Env (Program gates _ _) minPort  _ _ _ _) =
+    buildPair :: String -> Either String (String, String)
+    buildPair s = case wordsBy (=='=') s of
+      h:t:[] -> Right (h, t)
+      lst -> Left $ "Malformed output mapping specified. Expected $OUTPUT=$URL, got '" <> intercalate "=" lst <> "'"
+
+dockerComposeProgram :: DockerEnv -> Program -> String
+dockerComposeProgram (DockerEnv minPort  _ _ _ _) (Program gates _ _) =
   "version: '2'\n\
   \services: \n" <> mconcat (reverse services)
     where 
