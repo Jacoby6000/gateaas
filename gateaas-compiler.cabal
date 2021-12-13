@@ -18,7 +18,7 @@ extra-source-files:  CHANGELOG.md, README.md
 
 executable gateaas-compiler
   main-is:             Main.hs
-  other-modules:       Model, Parser
+  other-modules:       Model, Parser, Interpreter.Docker, Interpreter.Resolver
   build-depends:
                       base >=4.13 && <5, 
                       Earley >0.13,

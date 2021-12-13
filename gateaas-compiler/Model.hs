@@ -13,9 +13,11 @@ data BoolExpr
   | XNOR BoolExpr BoolExpr
   | NOT BoolExpr
   -- | LIT Bool
-  | INPUT [Char] 
-  | OUTPUT [Char] BoolExpr
-  | LET [Char] BoolExpr
-  | REF [Char]
+  | INPUT String 
+  | OUTPUT String BoolExpr
+  | DEF String [String] BoolExpr
+  | INVOKE String [BoolExpr]
+  | LET String BoolExpr
+  | REF String
   deriving(Show)
 makeBaseFunctor ''BoolExpr
