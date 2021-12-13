@@ -1,0 +1,12 @@
+INPUT a
+INPUT b
+INPUT cIn
+LET aXORb = (a XOR b)
+
+DEF calcCarry a b axorb cin =
+  (a AND b) OR (axorb AND cin)
+
+OUTPUT S1 = (aXORb XOR cIn)
+LET carry1 = calcCOut(a b aXORb cIn)
+OUTPUT cOut = carry1
+

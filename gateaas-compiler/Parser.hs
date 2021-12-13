@@ -5,18 +5,14 @@ import Control.Applicative
 import Data.Char
 import Text.Earley
 import Data.List.Split
+import Data.List
 
 import Model
+import Data.List.Split.Internals (Splitter(..), DelimPolicy(..), CondensePolicy(..), EndPolicy(..), Chunk(..), Delimiter(..))
 
 parseString :: [Char] -> ([(BoolExpr, Int)], Report [Char] [[Char]])
-parseString s = allParses (parser gateaasGrammar) $ tokenize s
+parseString s = allParses (parser gateaasGrammar) $ split (dropBlanks $ oneOf ")(") =<< words s
 
-tokenize :: String -> [String]
-tokenize s = subToken =<< wordsBy isSpace s
-  where
-    subToken :: String -> [String]
-    subToken ('(':t) = ["(", t]
-    subToken str = if last str == ')' then [init str, ")"] else [str]
 
 gateaasGrammar :: Grammar r (Prod r [Char] [Char] BoolExpr)
 gateaasGrammar = mdo 
@@ -41,7 +37,7 @@ gateaasGrammar = mdo
   y5 <- rule $ (XNOR <$> y5 <* namedToken "XNOR") <*> y6 <|> y6
   y6 <- rule $ (NOR <$> y6 <* namedToken "NOR") <*> y7 <|> y7
   y7 <- rule $ NOT <$> (namedToken "NOT" *> y8) <|> y8
-  y8 <- rule $ (INVOKE <$> identifier <*> many y1) <|> y9
+  y8 <- rule $ (INVOKE <$> identifier <*> (namedToken "(" *> many y1 <* namedToken ")")) <|> y9
   y9 <- rule $ (REF <$> identifier) <|> y10
   -- y9 <- rule $ LIT <$> (toLit <$> satisfy isLit) <|> y10
   y10 <- rule $ namedToken "(" *> y1 <* namedToken ")"

@@ -12,6 +12,26 @@ import Parser
 import Interpreter.Docker(dockerComposeProgram, dockerEnvParser, DockerEnv)
 import Interpreter.Resolver(resolveBoolExpr)
 
+main :: IO ()
+main = do
+  (Opts inFile outFile mode) <- execParser optParser
+  programString <- readFile inFile
+  let parseResult = parseString programString 
+  print parseResult
+  let mostParsed = fst $ last (fst parseResult)
+  let program = first (\es -> "References to variables before they are defined: " <> intercalate "," es) (resolveBoolExpr mostParsed)
+  result <- case mode of
+    Docker env -> pure $ dockerComposeProgram env <$> program
+    ProgString _ -> pure $ Right $ progToString mostParsed
+  either error (write outFile) result
+    where
+      write :: Maybe String -> String -> IO ()
+      write Nothing s = putStrLn s
+      write (Just name) s = 
+        do 
+          writeFile name s
+          putStrLn $ "Successfully wrote to " <> name
+
 data Opts = Opts {
   _inputFile :: String,
   _outputFile :: Maybe String,
@@ -35,26 +55,6 @@ envParser = subparser
     (command "docker" (Docker <$> dockerEnvParser)
     <> command "string"  (ProgString <$> progToStringParser)
     )
-
-main :: IO ()
-main = do
-  (Opts inFile outFile mode) <- execParser optParser
-  programString <- readFile inFile
-  let parseResult = parseString programString 
-  let mostParsed = fst $ last (fst parseResult)
-  let program = first (\es -> "References to variables before they are defined: " <> intercalate "," es) (resolveBoolExpr mostParsed)
-  result <- case mode of
-    Docker env -> pure $ dockerComposeProgram env <$> program
-    ProgString _ -> pure $ Right $ progToString mostParsed
-  either error (write outFile) result
-    where
-      write :: Maybe String -> String -> IO ()
-      write Nothing s = putStrLn s
-      write (Just name) s = 
-        do 
-          writeFile name s
-          putStrLn $ "Successfully wrote to " <> name
-
 
 data ProgToStringEnv = ProgToStringEnv Int
 
