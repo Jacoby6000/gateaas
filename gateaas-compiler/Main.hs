@@ -81,7 +81,7 @@ progToString = cata go
     go (OUTPUTF s expr) = "OUTPUT " <> s <> " = " <> expr
     go (LETF s expr) = "LET " <> s <> " = " <> expr
     go (DEFF name params expr) = "DEF " <> name <> " " <> unwords params <> " = " <> expr
-    go (INVOKEF name params) = name <> " " <> unwords params 
+    go (INVOKEF name params) = name <> " (" <> unwords params  <> ")"
     go (REFF s) = s
 
     bracket :: String -> String
